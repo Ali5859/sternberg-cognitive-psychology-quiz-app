@@ -27,6 +27,12 @@ export interface QuizResult {
     analysis: string;
 }
 
+// For spaced repetition system
+export interface PracticeQuestion extends Question {
+    srsLevel: number;
+    nextReviewDate: string; // ISO string
+}
+
 export enum AppState {
     STARTUP,
     API_KEY_SETUP,

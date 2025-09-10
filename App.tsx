@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { AppState, Chapter, Question, QuizResult, UserAnswer, Difficulty } from './types';
-import { QUIZ_QUESTION_COUNT, QUIZ_DURATIONS } from './constants';
+import { AppState, Chapter, Question, QuizResult, UserAnswer, Difficulty, PracticeQuestion } from './types';
+import { QUIZ_QUESTION_COUNT, QUIZ_DURATIONS, SRS_INTERVALS_DAYS } from './constants';
 import HomeScreen from './components/HomeScreen';
 import QuizScreen from './components/QuizScreen';
 import ResultsScreen from './components/ResultsScreen';
@@ -21,7 +21,8 @@ const App: React.FC = () => {
     const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
     const [questions, setQuestions] = useState<Question[]>([]);
     const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
-    const [practiceQuestions, setPracticeQuestions] = useState<Question[]>([]);
+    const [practiceQuestions, setPracticeQuestions] = useState<PracticeQuestion[]>([]);
+    const [currentPracticeSet, setCurrentPracticeSet] = useState<PracticeQuestion[]>([]);
     const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Question[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [quizDuration, setQuizDuration] = useState<number>(QUIZ_DURATIONS[Difficulty.MEDIUM]);
@@ -49,7 +50,17 @@ const App: React.FC = () => {
     useEffect(() => {
         const storedPracticeQuestions = localStorage.getItem('practiceQuestions');
         if (storedPracticeQuestions) {
-            setPracticeQuestions(JSON.parse(storedPracticeQuestions));
+            let parsed = JSON.parse(storedPracticeQuestions);
+            // Migration for old data structure without SRS fields
+            if (parsed.length > 0 && typeof parsed[0].srsLevel === 'undefined') {
+                parsed = parsed.map((q: Question) => ({
+                    ...q,
+                    srsLevel: 0,
+                    nextReviewDate: new Date().toISOString(),
+                }));
+                 localStorage.setItem('practiceQuestions', JSON.stringify(parsed));
+            }
+            setPracticeQuestions(parsed);
         }
         const storedBookmarkedQuestions = localStorage.getItem('bookmarkedQuestions');
         if (storedBookmarkedQuestions) {
@@ -109,11 +120,25 @@ const App: React.FC = () => {
         );
         
         const updatedPracticeQuestions = [...practiceQuestions];
-        incorrectQuestions.forEach(iq => {
-            if(!updatedPracticeQuestions.some(pq => pq.id === iq.id)) {
-                updatedPracticeQuestions.push(iq);
+        incorrectQuestions.forEach(incorrectQ => {
+            const existingIndex = updatedPracticeQuestions.findIndex(pq => pq.id === incorrectQ.id);
+            if (existingIndex !== -1) {
+                // Question already in practice, reset its progress as it was answered incorrectly again
+                updatedPracticeQuestions[existingIndex] = {
+                    ...updatedPracticeQuestions[existingIndex],
+                    srsLevel: 0,
+                    nextReviewDate: new Date().toISOString(),
+                };
+            } else {
+                // Add as a new practice question at the lowest SRS level
+                updatedPracticeQuestions.push({
+                    ...incorrectQ,
+                    srsLevel: 0,
+                    nextReviewDate: new Date().toISOString(),
+                });
             }
         });
+
         setPracticeQuestions(updatedPracticeQuestions);
         localStorage.setItem('practiceQuestions', JSON.stringify(updatedPracticeQuestions));
 
@@ -151,7 +176,10 @@ const App: React.FC = () => {
     }, []);
 
     const handleStartPractice = useCallback(() => {
-        if(practiceQuestions.length > 0) {
+        const now = new Date();
+        const dueQuestions = practiceQuestions.filter(q => new Date(q.nextReviewDate) <= now);
+        if (dueQuestions.length > 0) {
+            setCurrentPracticeSet(dueQuestions);
             setAppState(AppState.PRACTICE);
         }
     }, [practiceQuestions]);
@@ -172,8 +200,26 @@ const App: React.FC = () => {
         localStorage.setItem('bookmarkedQuestions', JSON.stringify(updated));
     };
 
-    const handleRemoveFromPractice = (questionId: string) => {
-        const updated = practiceQuestions.filter(q => q.id !== questionId);
+    const handlePracticeQuestionAnswered = (questionId: string, isCorrect: boolean) => {
+        const updated = [...practiceQuestions];
+        const questionIndex = updated.findIndex(q => q.id === questionId);
+        
+        if (questionIndex === -1) return;
+
+        const question = updated[questionIndex];
+
+        if (isCorrect) {
+            const newSrsLevel = question.srsLevel + 1;
+            const intervalDays = SRS_INTERVALS_DAYS[Math.min(newSrsLevel - 1, SRS_INTERVALS_DAYS.length - 1)];
+            const nextReviewDate = new Date();
+            nextReviewDate.setDate(nextReviewDate.getDate() + intervalDays);
+            
+            updated[questionIndex] = { ...question, srsLevel: newSrsLevel, nextReviewDate: nextReviewDate.toISOString() };
+        } else {
+            // Incorrect answer, reset SRS level and make it due for review again soon
+            updated[questionIndex] = { ...question, srsLevel: 0, nextReviewDate: new Date().toISOString() };
+        }
+
         setPracticeQuestions(updated);
         localStorage.setItem('practiceQuestions', JSON.stringify(updated));
     };
@@ -217,16 +263,22 @@ const App: React.FC = () => {
                 return quizResult && <ResultsScreen result={quizResult} onRetry={handleRetryQuiz} onHome={handleGoHome} onPractice={handleStartPractice}/>;
             case AppState.PRACTICE:
                 return <PracticeScreen 
-                    questions={practiceQuestions} 
+                    questions={currentPracticeSet} 
                     onHome={handleGoHome} 
-                    onQuestionCorrect={handleRemoveFromPractice}
+                    onQuestionAnswered={handlePracticeQuestionAnswered}
                     title="تمرین نقاط ضعف"
                 />;
             case AppState.BOOKMARKS:
+                 // FIX: The prop 'onQuestionCorrect' did not exist on PracticeScreen. It has been replaced with 'onQuestionAnswered'.
+                 // A handler is now provided to remove a bookmarked question if it is answered correctly. This resolves the original type error.
                  return <PracticeScreen 
                     questions={bookmarkedQuestions} 
                     onHome={handleGoHome} 
-                    onQuestionCorrect={handleRemoveFromBookmarks}
+                    onQuestionAnswered={(questionId, isCorrect) => {
+                        if (isCorrect) {
+                            handleRemoveFromBookmarks(questionId);
+                        }
+                    }}
                     title="سوالات نشان شده"
                 />;
             case AppState.STATS:
@@ -239,7 +291,7 @@ const App: React.FC = () => {
                     onShowStats={() => setAppState(AppState.STATS)} 
                     onShowBookmarks={handleShowBookmarks}
                     onEditApiKey={() => { setError(null); setAppState(AppState.API_KEY_SETUP); }}
-                    practiceQuestionCount={practiceQuestions.length}
+                    practiceQuestionCount={practiceQuestions.filter(q => new Date(q.nextReviewDate) <= new Date()).length}
                     bookmarkedQuestionCount={bookmarkedQuestions.length} 
                     error={error} 
                     theme={theme}

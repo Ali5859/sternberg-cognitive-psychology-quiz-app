@@ -17,6 +17,9 @@ export const QUIZ_DURATIONS: { [key in Difficulty]: number } = {
     [Difficulty.HARD]: 240, // 4 minutes
 };
 
+// Intervals for spaced repetition, in days.
+export const SRS_INTERVALS_DAYS = [1, 3, 7, 14, 30, 60, 120, 365];
+
 
 export const CHAPTERS: Chapter[] = [
     {

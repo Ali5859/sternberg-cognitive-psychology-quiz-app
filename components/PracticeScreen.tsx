@@ -1,39 +1,35 @@
-
 import React, { useState } from 'react';
+// FIX: Changed import from PracticeQuestion to Question to make the component more reusable, as it doesn't rely on SRS-specific properties.
 import { Question } from '../types';
 import QuestionCard from './QuestionCard';
 import ChevronLeftIcon from './icons/ChevronLeftIcon';
 
 interface PracticeScreenProps {
+    // FIX: Updated prop type to Question[] to accept any kind of question array, not just practice questions with SRS data.
     questions: Question[];
     onHome: () => void;
-    onQuestionCorrect: (questionId: string) => void;
+    onQuestionAnswered: (questionId: string, isCorrect: boolean) => void;
     title: string;
 }
 
-const PracticeScreen: React.FC<PracticeScreenProps> = ({ questions, onHome, onQuestionCorrect, title }) => {
+const PracticeScreen: React.FC<PracticeScreenProps> = ({ questions, onHome, onQuestionAnswered, title }) => {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [isFinished, setIsFinished] = useState(questions.length === 0);
 
-    const handleAnswerSelect = (selectedAnswer: string) => {
+    const handleAnswer = (selectedAnswer: string) => {
         const currentQuestion = questions[currentQuestionIndex];
         const isCorrect = currentQuestion.correctAnswer === selectedAnswer;
-        if (isCorrect) {
-            onQuestionCorrect(currentQuestion.id);
-        }
+        onQuestionAnswered(currentQuestion.id, isCorrect);
 
         setTimeout(() => {
-            // If the question was correct, the array length will decrease.
-            const nextTotal = isCorrect ? questions.length - 1 : questions.length;
-            if (currentQuestionIndex < nextTotal - 1) {
-                // No need to increment index if the current one was removed
-                if (!isCorrect) {
-                   setCurrentQuestionIndex(prev => prev + 1);
-                }
+            // The list of questions for this session is fixed. We just iterate through it.
+            // The parent component handles the SRS logic and state updates.
+            if (currentQuestionIndex < questions.length - 1) {
+                setCurrentQuestionIndex(prev => prev + 1);
             } else {
                 setIsFinished(true);
             }
-        }, 1500);
+        }, 1500); // Allow user to see feedback before next question
     };
 
     const currentQuestion = questions[currentQuestionIndex];
@@ -71,8 +67,7 @@ const PracticeScreen: React.FC<PracticeScreenProps> = ({ questions, onHome, onQu
                 <QuestionCard
                     key={currentQuestion.id}
                     question={currentQuestion}
-                    // FIX: The 'onAnswer' prop is required by QuestionCard. Changed from 'onAnswerSelect' to satisfy the component's required props.
-                    onAnswer={handleAnswerSelect}
+                    onAnswer={handleAnswer}
                 />
             </div>
         </div>
