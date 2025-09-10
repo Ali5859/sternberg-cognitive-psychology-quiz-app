@@ -26,7 +26,7 @@
 <img width="402" height="342" alt="y" src="https://github.com/user-attachments/assets/ee28df66-3da4-4659-b380-dcf8c6ff13bd" />
 <img width="468" height="447" alt="x" src="https://github.com/user-attachments/assets/1be07629-5f4f-4671-89a9-057d8061c0c1" />
 
-
+# برای شروع روی Start Quiz App.bat کلیک کنید
 ---
 
 ### 👨‍💻 ساخته شده توسط: علی اسلامی
