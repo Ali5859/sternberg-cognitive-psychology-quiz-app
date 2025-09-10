@@ -1,0 +1,5 @@
+{
+  "name": "Cognitive Psychology Quiz Master",
+  "description": "An interactive and adaptive quiz application based on Sternberg's 'Cognitive Psychology'. It generates questions for selected chapters, provides timed quizzes, and offers personalized feedback with strength/weakness analysis powered by Gemini. Users can track their progress with charts and practice areas needing improvement.",
+  "requestFramePermissions": []
+}
